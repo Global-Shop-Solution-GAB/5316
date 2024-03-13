@@ -1,0 +1,107 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Created by SKC for Advanced Metal Components on 9/30/2018
+'This will update discount quantites based on an incoming excel sheet
+v.Local.sFile.Declare
+v.Local.bExists.Declare
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+'Browser to get the file
+f.Intrinsic.UI.ShowOpenFileDialog("", "*.xlxs", v.Ambient.CurDir, v.Local.sFile)
+F.Intrinsic.Control.If(v.Local.sFile, !=,"***CANCEL***")
+	'Read the file
+	F.Automation.MSExcel.CheckPresence(v.Local.bExists)
+	F.Intrinsic.Control.If(v.Local.bExists)
+	F.Intrinsic.UI.InvokeWaitDialog("Processing File", "Working On It")
+		F.Intrinsic.Control.CallSub(ReadFileToDataTable,"sFile", v.Local.sFile)
+		'We have data now to process
+		F.ODBC.Connection!conx.OpenCompanyConnection()
+		F.Intrinsic.Control.CallSub("ProcessDeletes")
+		F.Intrinsic.Control.CallSub("ProcessDiscountUpdates")
+		F.ODBC.Connection!conx.Close
+		F.Intrinsic.UI.CloseWaitDialog()
+	F.Intrinsic.Control.Else
+		F.Intrinsic.UI.Msgbox("Excel is required to process.  Please Install!", "Excel Missing!")
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.ReadFileToDataTable.Start
+v.Local.sDataRows.Declare
+v.Local.sSpreedSheet.Declare
+v.Local.sDataType.Declare
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+F.Automation.MSExcel.ReadSpreadsheet(v.Args.sfile, 25,,v.Local.sSpreedSheet)
+
+F.Intrinsic.String.Split(v.Local.sSpreedSheet, "&^&",v.Local.sDataRows)
+v.Local.sDataType.Set("String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String*!*String")
+F.Data.DataTable.CreateFromString("PriceData", v.Local.sDataRows,"PART*!*DISC_QTY_1*!*DISC_PRICE_1*!*DISC_QTY_2*!*DISC_PRICE_2*!*DISC_QTY_3*!*DISC_PRICE_3*!*DISC_QTY_4*!*DISC_PRICE_4*!*DISC_QTY_5*!*DISC_PRICE_5*!*DISC_QTY_6*!*DISC_PRICE_6*!*DISC_QTY_7*!*DISC_PRICE_7*!*DISC_QTY_8*!*DISC_PRICE_8*!*DISC_QTY_9*!*DISC_PRICE_9*!*Update1*!*Equal*!*Endstatement*!*Where*!*Endstatement2*!*Script",v.Local.sDataType,"*!*", "$!$", True)
+F.Data.DataTable.DeleteRow("PriceData",0 )
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ReadFileToDataTable.End
+
+Program.Sub.ProcessDeletes.Start
+'create a viwe of the blank values
+v.Local.sFilter.Declare
+v.Local.iCount.Declare
+v.Local.sSql.Declare
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.sFilter.Set("Disc_Qty_1 = '' And DISC_PRICE_1 = '' And Disc_Qty_2 = '' And DISC_PRICE_2 = '' And Disc_Qty_3 = '' And DISC_PRICE_3 = '' And Disc_Qty_4 = '' And DISC_PRICE_4 = '' And Disc_Qty_5 = '' And DISC_PRICE_5 = '' And Disc_Qty_6 = '' And DISC_PRICE_6 = '' And Disc_Qty_7 = '' And DISC_PRICE_7 = '' And Disc_Qty_8 = '' And DISC_PRICE_8 = '' And  Disc_Qty_9 = '' And DISC_PRICE_9 = ''")
+F.Data.DataView.Create("PriceData", "Deleted", 22, v.Local.sFilter, )
+F.Intrinsic.Control.For(v.Local.iCount, 0, v.DataView.PriceData!Deleted.rowcount--, 1)
+	F.Intrinsic.Control.If(v.DataView.PriceData!Deleted(v.Local.iCount).Part!fieldvaltrim, !=, "")
+		F.Intrinsic.String.Build("Delete from OE_Discounts where OE_Disc_Key = 'ORDDSC' and Part = '{0}'", v.DataView.PriceData!Deleted(v.Local.iCount).Part!fieldvaltrim, v.Local.sSql)
+		F.ODBC.Connection!conx.Execute(v.Local.sSql)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(v.Local.iCount)
+F.Data.DataView.Close("PriceData", "Deleted")
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ProcessDeletes.End
+
+Program.Sub.ProcessDiscountUpdates.Start
+v.Local.iCount.Declare
+v.Local.sSql.Declare
+v.Local.sFilter.Declare
+v.Local.sPart.Declare
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.sFilter.Set("Disc_Qty_1 <> '' Or DISC_PRICE_1 <> '' Or Disc_Qty_2 <> '' Or DISC_PRICE_2 <> '' Or Disc_Qty_3 <> '' Or DISC_PRICE_3 <> '' Or Disc_Qty_4 <> '' Or DISC_PRICE_4 <> '' Or Disc_Qty_5 <> '' Or DISC_PRICE_5 <> '' Or Disc_Qty_6 <> '' Or DISC_PRICE_6 <> '' Or Disc_Qty_7 <> '' Or DISC_PRICE_7 <> '' Or Disc_Qty_8 <> '' Or DISC_PRICE_8 <> '' Or  Disc_Qty_9 <> '' Or DISC_PRICE_9 <> ''")
+F.Data.DataView.Create("PriceData", "Deleted", 22, v.Local.sFilter, )
+F.Intrinsic.Control.For(v.Local.iCount, 0, v.DataView.PriceData!Deleted.rowcount--, 1)
+	F.Intrinsic.Control.If(v.DataView.PriceData!Deleted(v.Local.iCount).Part!fieldvaltrim, !=, "")
+		'check if the part exists if so just execute the update statement else insert then update
+		F.Intrinsic.String.Build("Select Part From OE_Discounts where OE_Disc_Key = 'ORDDSC' and Part = '{0}'", v.DataView.PriceData!Deleted(v.Local.iCount).Part!fieldvaltrim, v.Local.sSql)
+		F.ODBC.Connection!conx.ExecuteAndReturn(v.Local.sSql, v.Local.sPart)
+		F.Intrinsic.Control.If(v.Ambient.ExecuteAndReturnEOF)
+			'insert a record to the table
+			F.Intrinsic.String.Build("Insert Into OE_Discounts (OE_Disc_Key, Part) Values ('ORDDSC', '{0}')", v.DataView.PriceData!Deleted(v.Local.iCount).Part!fieldvaltrim, v.Local.ssql)
+			F.ODBC.Connection!conx.Execute(v.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		'Use the update statement from the excel file.  Lets hope this customer was smart enough to write it correctly
+		F.ODBC.Connection!conx.Execute(v.DataView.PriceData!Deleted(v.Local.iCount).Script!fieldvaltrim)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(v.Local.iCount)
+F.Data.DataView.Close("PriceData", "Deleted")
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.ProcessDiscountUpdates.End
